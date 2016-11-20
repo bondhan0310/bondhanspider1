@@ -8,6 +8,8 @@ import java.io.*;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashSet;
+import java.util.concurrent.CountDownLatch;
 
 import hanweispider.ItemRow;
 
@@ -17,13 +19,11 @@ public class Spider {
     private static String outfile2 = "d:"+File.separator+File.separator+"互联网编程算法final.csv";//输出去重和排序后的数据
     private static boolean bfile = true;                 
     private static ArrayList<String> datalist = new ArrayList<String>();   
+    private static ArrayList<String> datalist1 = new ArrayList<String>();  
     private static ArrayList<ItemRow> item = new ArrayList<ItemRow>();
     private static String headtitle = "书籍名称等信息,评分,评价人数";               
     private static int countrs = 0;                         
 
-    /*
-     * 
-     */
     public static void getDouBanList(Document doc) throws Exception {
 
         Element divNode = doc.getElementById("wrapper"); //根据阅读html源码，逐层次获取各个对象         
@@ -70,21 +70,19 @@ public class Spider {
         }
     }       
  
-    /*
-     * 
-     */
 	private static void outputsfinal(String file,ArrayList<ItemRow> item) throws Exception {
 
-        String strout = "";
-        
         for(int i=0;i<item.size();i++){
-        	
-        	datalist.set(0, item.get(i).title);
-        	datalist.set(1, item.get(i).score);
-        	datalist.set(2, item.get(i).amount);
-        	
-        	for (int j = 0; j < datalist.size(); j++) {
-                strout = strout + datalist.get(j) + ",";               
+        	datalist1.clear();
+        	datalist1.add("");
+        	datalist1.add("");
+        	datalist1.add("");
+        	datalist1.set(0, item.get(i).title);
+        	datalist1.set(1, item.get(i).score);
+        	datalist1.set(2, item.get(i).amount);
+        	String strout = "";
+        	for (int j = 0; j < datalist1.size(); j++) {
+                strout =  strout + datalist1.get(j) + ",";               
             }
             if (bfile) {
                 FileWriter fw = new FileWriter(file, true);          
@@ -99,7 +97,6 @@ public class Spider {
             System.out.println(countrs + "  " + strout);  
         	
         }
-                
     }
     private static void outputRs(String file) throws Exception {
 
@@ -119,19 +116,22 @@ public class Spider {
         countrs = countrs + 1;
         System.out.println(countrs + "  " + strout);          
     }
-    public static class Spidermarch implements Runnable {
+    public static class Spidermarch extends Thread implements Runnable {
     	
 		String surl;
 		int n;
 		String flag;
 		String rawurl;
 		
-	public Spidermarch(String surl,int n,String flag,String rawurl){
+		private CountDownLatch count;
+		
+	public Spidermarch(String surl,int n,String flag,String rawurl,CountDownLatch count){
 		
 		this.surl = surl;
 		this.n = n;
 		this.flag = flag;
 		this.rawurl= rawurl;
+		this.count=count;
 	}
 	public synchronized static void skipPage(String surl, int n, String flag, String rawurl) throws Exception{
 		//爬虫伪装成浏览器，尽管如此，依然被墙得郁闷，代理服务器也不咋好用
@@ -176,6 +176,7 @@ public class Spider {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
+		this.count.countDown();
 	}
 }
     public static void main(String[] args) throws Exception{
@@ -201,26 +202,20 @@ public class Spider {
         String[] flag = {flag1,flag2,flag3};
         int[] n = {n1,n2,n3};
         String[] rawURL = {rawurl1,rawurl2,rawurl3};
-        
+        CountDownLatch count = new CountDownLatch(3);
         for(int i=0;i<3;i++){
         	
-        	spider[i] = new Spidermarch(URL[i],n[i],flag[i],rawURL[i]);
+        	spider[i] = new Spidermarch(URL[i],n[i],flag[i],rawURL[i],count);
         	new Thread(spider[i]).start();
         }
-        
-        /*
-         * 冒泡法去掉重复的数据
-         */
-        for(int i=0;i<item.size()-1;i++){
-        	
-        	for(int j=0;j<item.size()-1-i;j++){
-        		
-        		if(item.get(j).title.equals(item.get(j+1).title)){
-        			
-        			item.remove(j+1);
-        		}
-        	}
-        }
+        try  
+        {  
+            count.await();  
+        }  
+        catch (InterruptedException e)  
+        {  
+            e.printStackTrace();  
+        }  
         /*
          * 按评分排序,评分相同按评论数排序
          */
@@ -240,7 +235,29 @@ public class Spider {
 			}
         };  
         Collections.sort(item, comparator);
+        /*
+         * 冒泡法去掉重复的数据
+         */
+        for(int i=0;i<item.size()-1;i++){
+        	
+        	for(int j=0;j<item.size()-1-i;j++){
+        		
+        		if((item.get(j).title).equals(item.get(j+1).title)){
+        			
+        			item.remove(item.get(j+1));
+        			j--;
+        		}else{
+        			
+        				ItemRow a = new ItemRow("", "", "");
+        				a = item.get(j+1);
+        				item.set(j+1, item.get(j));
+        				item.set(j, a);
+        			
+        		}
+        	}
+        }
+        Collections.reverse(item);
         outputsfinal(outfile2,item);
-          
-    }
+        //final version flag
+    }    
 }
