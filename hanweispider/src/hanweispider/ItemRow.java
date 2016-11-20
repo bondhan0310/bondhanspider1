@@ -3,6 +3,10 @@ package hanweispider;
 /*
  * 书籍类，为了存储到list里，以便后续排序等需求
  */
+
+/*
+ * ccccccccc
+ */
 public class ItemRow {
 	
 	public String title;
